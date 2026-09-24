@@ -7,7 +7,7 @@ try {
 
     echo "FETCH_ASSOC" . PHP_EOL;
     print_r($repository->getAllAssoc());
-
+   
     echo "FETCH_ARRAY (numeric array)" . PHP_EOL;
     print_r($repository->getAllArray());
 

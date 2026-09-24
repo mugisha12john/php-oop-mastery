@@ -4,8 +4,9 @@ require_once "UserRepository.php";
 
 try {
     $repository = new UserRepository($conn);
-    $email = "kaniziyusi." . time() . "@example.com";
-    $userId = $repository->insert(3, "Kaniziyusi", $email, "0781234577");
+    $email = "kigalicollege." . time() . "@example.com";
+    $userId = $repository->insert(2, "Noah", $email, "07861277");
+   
 
     echo "User inserted successfully. New ID: {$userId}" . PHP_EOL;
 } catch (PDOException $e) {

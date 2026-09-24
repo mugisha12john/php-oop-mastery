@@ -1,20 +1,20 @@
 <?php
-
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 require_once "../connection.php";
+require_once "./helper/getId.php";
 
 try {
 
-    // ID of the user we want to delete
-    $user_id = 2;
+    $user_id = getPositiveIntFromGetId('id');
 
-    // DELETE query
     $sql = "DELETE FROM users
             WHERE user_id = :user_id";
 
-    // Prepare the query
+
     $stmt = $conn->prepare($sql);
 
-    // Execute the query
     $stmt->execute([
         ":user_id" => $user_id
     ]);
