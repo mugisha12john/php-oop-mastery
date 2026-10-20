@@ -1,10 +1,12 @@
 <?php
 
+require_once __DIR__ . '/cli_only.php';
+
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
-require_once "../connection.php";
-require_once "./helper/getId.php";
+require_once __DIR__ . '/../connection.php';
+require_once __DIR__ . '/helper/getId.php';
 require_once "UserRepository.php";
 
 

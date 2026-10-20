@@ -8,6 +8,8 @@ class CustomerController {
         $this->model = new CustomerModel();
     }
     public function getAllCustomers($page = 1, $limit = 10) {
+        $page = max(1, (int) $page);
+        $limit = max(1, min(100, (int) $limit));
         $offset = ($page - 1) * $limit;
         
         try {
@@ -293,10 +295,11 @@ class CustomerController {
             $errors[] = 'Physical address cannot exceed 255 characters';
         }
 
-        if (empty($data['monthly_income_rwf'])) {
+        if (!isset($data['monthly_income_rwf']) || $data['monthly_income_rwf'] === '') {
             $errors[] = 'Monthly income is required';
-        } elseif (!is_numeric($data['monthly_income_rwf']) || $data['monthly_income_rwf'] < 0) {
-            $errors[] = 'Monthly income must be a positive number';
+        } elseif (!is_numeric($data['monthly_income_rwf']) || $data['monthly_income_rwf'] < 0
+            || $data['monthly_income_rwf'] > 999999999999.99) {
+            $errors[] = 'Monthly income must be between 0 and 999999999999.99';
         }
 
         if (!empty($data['kyc_status'])) {

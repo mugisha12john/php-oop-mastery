@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/cli_only.php';
+
 require_once "UserRepository.php";
 
 try {

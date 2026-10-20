@@ -5,6 +5,7 @@
  */
 
 require_once __DIR__ . '/baseModel.php';
+require_once __DIR__ . '/../includes/bootstrap.php';
 
 class CustomerModel extends BaseModel {
     protected $table = 'customers';
@@ -18,6 +19,13 @@ class CustomerModel extends BaseModel {
     private $physical_address;
     private $monthly_income_rwf;
     private $kyc_status;
+    private $firm_id;
+    private $actor_id;
+
+    private function scopeClause(): string {
+        // Scope comes from the authenticated account, never from form fields.
+        return $this->firm_id === null ? '' : ' AND firm_id = ' . (int) $this->firm_id;
+    }
 
     public function __construct(
         $national_id_number = "",
@@ -31,6 +39,9 @@ class CustomerModel extends BaseModel {
         $customer_id = null
     ) {
         parent::__construct();
+        $actor = require_customer_access();
+        $this->firm_id = customer_scope();
+        $this->actor_id = (int) $actor['user_id'];
         $this->customer_id = $customer_id;
         $this->user_id = $user_id;
         $this->national_id_number = $national_id_number;
@@ -46,8 +57,8 @@ class CustomerModel extends BaseModel {
     public function save($registered_by = null) {
         $sql = "INSERT INTO customers 
                 (user_id, national_id_number, full_name, phone_number, email, 
-                 physical_address, monthly_income_rwf, kyc_status, registered_by, created_at, updated_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                 physical_address, monthly_income_rwf, kyc_status, registered_by, firm_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
 
         $params = [
             $this->user_id,
@@ -58,7 +69,8 @@ class CustomerModel extends BaseModel {
             $this->physical_address,
             $this->monthly_income_rwf,
             $this->kyc_status,
-            $registered_by
+            $this->actor_id,
+            $this->firm_id
         ];
 
         try {
@@ -83,7 +95,7 @@ class CustomerModel extends BaseModel {
                 full_name = ?, phone_number = ?, email = ?, 
                 physical_address = ?, monthly_income_rwf = ?, 
                 kyc_status = ?, updated_at = NOW() 
-                WHERE customer_id = ?";
+                WHERE customer_id = ?" . $this->scopeClause();
 
         $params = [
             $this->full_name,
@@ -111,7 +123,7 @@ class CustomerModel extends BaseModel {
 
 
     public function getAll($limit = null, $offset = 0) {
-        $sql = "SELECT * FROM customers ORDER BY created_at DESC";
+        $sql = "SELECT * FROM customers WHERE 1=1" . $this->scopeClause() . " ORDER BY created_at DESC";
 
         if ($limit) {
             $sql .= " LIMIT ? OFFSET ?";
@@ -123,33 +135,33 @@ class CustomerModel extends BaseModel {
 
 
     public function getById($customer_id) {
-        $sql = "SELECT * FROM customers WHERE customer_id = ?";
+        $sql = "SELECT * FROM customers WHERE customer_id = ?" . $this->scopeClause();
         return $this->fetchOne($sql, [$customer_id]);
     }
 
 
     public function getByNationalId($national_id_number) {
-        $sql = "SELECT * FROM customers WHERE national_id_number = ?";
+        $sql = "SELECT * FROM customers WHERE national_id_number = ?" . $this->scopeClause();
         return $this->fetchOne($sql, [$national_id_number]);
     }
 
  
     public function getByEmail($email) {
-        $sql = "SELECT * FROM customers WHERE email = ?";
+        $sql = "SELECT * FROM customers WHERE email = ?" . $this->scopeClause();
         return $this->fetchOne($sql, [$email]);
     }
 
 
     public function getByPhone($phone_number) {
-        $sql = "SELECT * FROM customers WHERE phone_number = ?";
+        $sql = "SELECT * FROM customers WHERE phone_number = ?" . $this->scopeClause();
         return $this->fetchOne($sql, [$phone_number]);
     }
 
 
     public function search($search_term) {
         $sql = "SELECT * FROM customers 
-                WHERE full_name LIKE ? OR phone_number LIKE ? OR national_id_number LIKE ?
-                ORDER BY full_name ASC";
+                WHERE (full_name LIKE ? OR phone_number LIKE ? OR national_id_number LIKE ?)"
+                . $this->scopeClause() . " ORDER BY full_name ASC";
 
         $search = "%$search_term%";
         return $this->fetchAll($sql, [$search, $search, $search]);
@@ -157,16 +169,19 @@ class CustomerModel extends BaseModel {
 
 
     public function getByKycStatus($kyc_status) {
-        $sql = "SELECT * FROM customers WHERE kyc_status = ? ORDER BY created_at DESC";
+        $sql = "SELECT * FROM customers WHERE kyc_status = ?" . $this->scopeClause() . " ORDER BY created_at DESC";
         return $this->fetchAll($sql, [$kyc_status]);
     }
 
  
     public function delete($customer_id) {
-        $sql = "DELETE FROM customers WHERE customer_id = ?";
+        $sql = "DELETE FROM customers WHERE customer_id = ?" . $this->scopeClause();
 
         try {
-            $this->execute($sql, [$customer_id]);
+            $statement = $this->execute($sql, [$customer_id]);
+            if ($statement->rowCount() === 0) {
+                return ['success' => false, 'message' => 'Customer not found'];
+            }
             return [
                 'success' => true,
                 'message' => 'Customer deleted successfully'
@@ -195,14 +210,14 @@ class CustomerModel extends BaseModel {
 
 
     public function getTotalCount() {
-        $sql = "SELECT COUNT(*) as total FROM customers";
+        $sql = "SELECT COUNT(*) as total FROM customers WHERE 1=1" . $this->scopeClause();
         $result = $this->fetchOne($sql);
         return $result['total'] ?? 0;
     }
 
 
     public function getCountByKycStatus($kyc_status) {
-        $sql = "SELECT COUNT(*) as total FROM customers WHERE kyc_status = ?";
+        $sql = "SELECT COUNT(*) as total FROM customers WHERE kyc_status = ?" . $this->scopeClause();
         $result = $this->fetchOne($sql, [$kyc_status]);
         return $result['total'] ?? 0;
     }

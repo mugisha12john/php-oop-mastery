@@ -4,53 +4,37 @@
  * Form to update existing customer
  */
 
+require_once __DIR__ . '/../../includes/bootstrap.php';
+$user = require_customer_access();
+
 require_once __DIR__ . '/../../controller/CustomerController.php';
 
 $controller = new CustomerController();
 $customer = null;
-$errors = [];
-$success = false;
 
 // Get customer ID from URL
 $customer_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($customer_id <= 0) {
+    http_response_code(400);
     die("Invalid customer ID");
 }
 
 // Fetch customer data
 $fetch_result = $controller->getCustomer($customer_id);
 if (!$fetch_result['success']) {
+    http_response_code(404);
     die("Customer not found");
 }
 
 $customer = $fetch_result['customer'];
 
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $data = [
-        'national_id_number' => $_POST['national_id_number'] ?? $customer['national_id_number'],
-        'full_name' => $_POST['full_name'] ?? '',
-        'phone_number' => $_POST['phone_number'] ?? '',
-        'email' => $_POST['email'] ?? '',
-        'physical_address' => $_POST['physical_address'] ?? '',
-        'monthly_income_rwf' => $_POST['monthly_income_rwf'] ?? 0,
-        'kyc_status' => $_POST['kyc_status'] ?? $customer['kyc_status']
-    ];
+$form_key = 'edit_' . $customer_id;
+$form_state = $_SESSION['customer_forms'][$form_key] ?? [];
+unset($_SESSION['customer_forms'][$form_key]);
 
-    $result = $controller->updateCustomer($customer_id, $data);
-
-    if ($result['success']) {
-        $success = true;
-        // Refresh customer data
-        $fetch_result = $controller->getCustomer($customer_id);
-        $customer = $fetch_result['customer'];
-        // Redirect after 2 seconds
-        header("Refresh: 2; url=listCustomers.php?msg=updated");
-    } else {
-        $errors = $result['errors'] ?? [$result['message']];
-    }
-}
+$errors = $form_state['errors'] ?? [];
+$customer = array_replace($customer, $form_state['input'] ?? []);
 ?>
 
 <!DOCTYPE html>
@@ -255,6 +239,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
+    <div style="width:100%">
+    <?php require __DIR__ . '/../../includes/customerNav.php'; ?>
     <div class="container">
         <h1>Edit Customer</h1>
 
@@ -265,12 +251,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 Last updated: <?php echo date('M d, Y H:i', strtotime($customer['updated_at'])); ?>
             </p>
         </div>
-
-        <?php if ($success): ?>
-            <div class="alert alert-success">
-                ✓ Customer updated successfully! Redirecting...
-            </div>
-        <?php endif; ?>
 
         <?php if (!empty($errors)): ?>
             <div class="alert alert-danger">
@@ -283,7 +263,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         <?php endif; ?>
 
-        <form method="POST" action="">
+        <form method="POST" action="../../customer.php">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="customer_id" value="<?php echo $customer_id; ?>">
             <!-- Identity Information -->
             <div class="form-section">
                 <div class="section-title">Identity Information</div>
@@ -385,6 +368,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </a>
             </div>
         </form>
+    </div>
     </div>
 </body>
 </html>

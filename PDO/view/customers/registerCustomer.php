@@ -4,35 +4,13 @@
  * Form to create new customer
  */
 
-require_once __DIR__ . '/../../controller/CustomerController.php';
+require_once __DIR__ . '/../../includes/bootstrap.php';
+$user = require_customer_access();
+$form_state = $_SESSION['customer_forms']['register'] ?? [];
+unset($_SESSION['customer_forms']['register']);
 
-$controller = new CustomerController();
-$errors = [];
-$success = false;
-
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $data = [
-        'national_id_number' => $_POST['national_id_number'] ?? '',
-        'full_name' => $_POST['full_name'] ?? '',
-        'phone_number' => $_POST['phone_number'] ?? '',
-        'email' => $_POST['email'] ?? '',
-        'physical_address' => $_POST['physical_address'] ?? '',
-        'monthly_income_rwf' => $_POST['monthly_income_rwf'] ?? 0,
-        'kyc_status' => 'PENDING',
-        'registered_by' => 1  // Replace with actual logged-in user ID
-    ];
-
-    $result = $controller->createCustomer($data);
-
-    if ($result['success']) {
-        $success = true;
-        // Redirect after 2 seconds
-        header("Refresh: 2; url=listCustomers.php?msg=created");
-    } else {
-        $errors = $result['errors'] ?? [$result['message']];
-    }
-}
+$errors = $form_state['errors'] ?? [];
+$input = $form_state['input'] ?? [];
 ?>
 
 <!DOCTYPE html>
@@ -224,14 +202,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
+    <div style="width:100%">
+    <?php require __DIR__ . '/../../includes/customerNav.php'; ?>
     <div class="container">
         <h1>Register New Customer</h1>
-
-        <?php if ($success): ?>
-            <div class="alert alert-success">
-                ✓ Customer registered successfully! Redirecting to customer list...
-            </div>
-        <?php endif; ?>
 
         <?php if (!empty($errors)): ?>
             <div class="alert alert-danger">
@@ -244,7 +218,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         <?php endif; ?>
 
-        <form method="POST" action="">
+        <form method="POST" action="../../customer.php">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="create">
             <!-- Identity Information -->
             <div class="form-section">
                 <div class="section-title">Identity Information</div>
@@ -255,7 +231,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </label>
                     <input type="text" id="national_id_number" name="national_id_number" 
                            placeholder="16-digit national ID" 
-                           value="<?php echo htmlspecialchars($_POST['national_id_number'] ?? ''); ?>"
+                           value="<?php echo htmlspecialchars($input['national_id_number'] ?? ''); ?>"
                            maxlength="16" required>
                     <div class="help-text">Must be exactly 16 digits</div>
                 </div>
@@ -266,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </label>
                     <input type="text" id="full_name" name="full_name" 
                            placeholder="Enter full name" 
-                           value="<?php echo htmlspecialchars($_POST['full_name'] ?? ''); ?>"
+                           value="<?php echo htmlspecialchars($input['full_name'] ?? ''); ?>"
                            maxlength="120" required>
                 </div>
             </div>
@@ -282,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </label>
                         <input type="tel" id="phone_number" name="phone_number" 
                                placeholder="+250 XXX XXX XXX" 
-                               value="<?php echo htmlspecialchars($_POST['phone_number'] ?? ''); ?>"
+                               value="<?php echo htmlspecialchars($input['phone_number'] ?? ''); ?>"
                                maxlength="20" required>
                     </div>
 
@@ -292,7 +268,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </label>
                         <input type="email" id="email" name="email" 
                                placeholder="email@example.com" 
-                               value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>"
+                               value="<?php echo htmlspecialchars($input['email'] ?? ''); ?>"
                                maxlength="190">
                     </div>
                 </div>
@@ -302,7 +278,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         Physical Address <span class="required">*</span>
                     </label>
                     <textarea id="physical_address" name="physical_address" 
-                              placeholder="Enter complete physical address" required><?php echo htmlspecialchars($_POST['physical_address'] ?? ''); ?></textarea>
+                              placeholder="Enter complete physical address" required><?php echo htmlspecialchars($input['physical_address'] ?? ''); ?></textarea>
                 </div>
             </div>
 
@@ -316,7 +292,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </label>
                     <input type="number" id="monthly_income_rwf" name="monthly_income_rwf" 
                            placeholder="0.00" 
-                           value="<?php echo htmlspecialchars($_POST['monthly_income_rwf'] ?? ''); ?>"
+                           value="<?php echo htmlspecialchars($input['monthly_income_rwf'] ?? ''); ?>"
                            step="0.01" min="0" required>
                     <div class="help-text">Used to calculate loan eligibility</div>
                 </div>
@@ -330,6 +306,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </a>
             </div>
         </form>
+    </div>
     </div>
 </body>
 </html>

@@ -6,9 +6,42 @@
 2. `customers` table exists
 3. MySQL user `app_user` with password `buban1234`
 4. Web server running (Apache/Nginx)
-5. PHP 7.4+ with PDO extension
+5. PHP 8.1+ with PDO MySQL and mbstring extensions
 
 ---
+
+## Test Scenario 0: Accounts and firm approval
+
+Run `php PDO/database/migrate.php`. Use an existing super admin or create one with `PDO/database/create_super_admin.php`.
+
+1. Open `PDO/registerFirm.php`, submit business and owner details, and sign in.
+2. Confirm the firm dashboard says it is awaiting approval. Direct customer page URLs must return 403.
+3. Sign in as super admin in another browser/session and approve the firm.
+4. Refresh the firm's existing session. Confirm customer links now appear.
+5. Register a second firm, reject it with a reason, and verify its status dashboard shows that reason and blocks customer access.
+6. Register and approve a third firm. Create customers for both approved firms and verify each sees only its own customers.
+7. Change a customer ID in a view/edit URL or submission to another firm's ID. Expect 404 and no changes.
+8. Sign out. Customer pages should redirect to login. Missing/invalid CSRF tokens on state changes should return 403.
+9. As super admin, verify both firms' customers are visible and approval history includes the reviewer and time.
+
+Automated checks: `python3 PDO/tests/workflow_test.py`. This uses temporary records in the configured development database and cleans them up afterward.
+
+The following customer scenarios require a signed-in, approved firm or a super admin.
+
+## Customer portal checks
+
+1. Open `PDO/index.php` while signed out. Confirm the welcome page links to customer sign in, staff sign in, and firm registration.
+2. As an approved firm, view a customer and choose **Customer login access**. Create login credentials. A different firm must receive 404 for that customer’s login setup URL. Existing account emails must fail without linking the customer.
+3. Sign in through `PDO/customerLogin.php` with the new account. Confirm the dashboard uses the shared MLMS styling and shows profile details, firm contacts, request counts, and the requests list.
+4. Before KYC verification, requesting a loan must show a profile notice. Verify KYC through the staff customer edit form and return to the customer portal.
+5. Open **Request a loan**. Choose an active product, enter an amount within its range, a term within its maximum, and a purpose. Submit and confirm the request details page shows `SUBMITTED` and the saved values.
+6. Test zero/negative amounts, values outside product limits, unavailable products, excessive terms, and missing purposes. Confirm the form preserves input and displays validation errors. Refresh/back/re-submit the original successful form; it must not create a duplicate.
+7. Sign in as another customer. The first customer’s detail URL must return 404 and their requests must not appear in the dashboard. Customer accounts must receive 403 on staff customer management and login provisioning pages.
+8. With controlled test records, update the application decision and link an issued loan. Confirm approved/rejected details, loan balance, interest, and dates appear for the correct customer. Internal manager notes must stay private.
+9. Check welcome, sign-in, dashboard, request, and detail pages at desktop and mobile sizes. Verify keyboard focus, readable labels, wrapped contact information, and horizontal scrolling for the requests table.
+10. Sign out and confirm loan pages require authentication.
+
+These functional and access checks are included in `python3 PDO/tests/workflow_test.py` (with `customer_portal_checks.py`). Visual layout checks require a browser.
 
 ## Test Scenario 1: Create Customer
 
@@ -25,8 +58,7 @@
 3. Click "Register Customer"
 
 ### Expected Result:
-- ✅ Success message appears
-- ✅ Redirects to list after 2 seconds
+- ✅ Redirects immediately to the list with a success message
 - ✅ New customer appears in list
 - ✅ KYC status shows "PENDING"
 
@@ -159,6 +191,8 @@ In `CustomerModel.php`, all queries use `?` placeholders:
 3. Perform actions
 4. Should see:
    - POST requests for form submissions
+   - Create/edit POST requests go to `PDO/customer.php` and receive a 303 redirect
+   - Invalid submissions return to the form with errors and entered values preserved
    - GET requests for page loads
    - No JavaScript errors
 

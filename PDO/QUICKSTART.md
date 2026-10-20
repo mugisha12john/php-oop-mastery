@@ -1,158 +1,30 @@
-# MLMS Quick Start Guide
+# Quick start
 
-## What You Have
+From the project root, run the additive database migration:
 
-A complete MVC-based Customer Management system for the Money Lending Management System (MLMS).
-
-## Start Using It
-
-### 1. View All Customers
-```
-http://localhost/class_learning/PDO/view/customers/listCustomers.php
-```
-- See all registered customers
-- Search by name, phone, or National ID
-- Click Edit or View for details
-
-### 2. Register New Customer
-```
-http://localhost/class_learning/PDO/view/customers/registerCustomer.php
-```
-- Fill in: National ID (16 digits), Name, Phone, Address, Income
-- System validates input
-- Shows success message & redirects
-
-### 3. Edit Existing Customer
-```
-http://localhost/class_learning/PDO/view/customers/editCustomer.php?id=1
-```
-- All fields editable except National ID
-- Update KYC status (Pending → Verified → Rejected)
-- Changes saved & timestamps updated
-
-### 4. View Customer Details
-```
-http://localhost/class_learning/PDO/view/customers/viewCustomer.php?id=1
-```
-- Read-only customer profile
-- Shows audit info (created/updated dates)
-- Links to edit or return to list
-
----
-
-## File Organization
-
-```
-PDO/
-├── config/config.php
-│   └─ Database connection factory (Singleton)
-│
-├── modules/
-│   ├─ baseModel.php        ← Abstract class with helper methods
-│   └─ customerModel.php    ← All customer database queries
-│
-├── controller/
-│   └─ CustomerController.php  ← Business logic & validation
-│
-└── view/customers/
-    ├─ listCustomers.php       ← List page (with search)
-    ├─ registerCustomer.php    ← Create form
-    ├─ editCustomer.php        ← Edit form
-    └─ viewCustomer.php        ← Details page
+```bash
+php PDO/database/migrate.php
 ```
 
----
+Use an existing super admin, or create a new one:
 
-## How It Works
-
-1. **User visits view** (HTML form)
-2. **Form submits to controller** via POST
-3. **Controller validates** the data
-4. **If valid, model executes** database query
-5. **Controller gets result** from model
-6. **View displays** success/error message
-
----
-
-## Built-In Features
-
-| Feature | Location |
-|---------|----------|
-| Create Customer | `registerCustomer.php` |
-| List All | `listCustomers.php` (10 per page) |
-| Search | Top of `listCustomers.php` |
-| Edit Customer | `editCustomer.php` |
-| View Details | `viewCustomer.php` |
-| KYC Status | In edit form (dropdown) |
-| Validation | `CustomerController.php` |
-| Pagination | `listCustomers.php` |
-
----
-
-## Database Fields
-
-When creating a customer, you provide:
-- **National ID** (16 digits, unique)
-- **Full Name** (up to 120 chars)
-- **Phone Number** (up to 20 chars, e.g. +250788123456)
-- **Email** (optional)
-- **Physical Address** (required)
-- **Monthly Income** (in RWF)
-
-All data is validated before being saved.
-
----
-
-## Next: Build Other Modules
-
-To create a **Loan Module**, follow the same pattern:
-
-**1. Create Model** → `modules/LoanModel.php`
-```php
-class LoanModel extends BaseModel {
-    public function save($data) { /* ... */ }
-    public function getAll() { /* ... */ }
-    // etc.
-}
+```bash
+php PDO/database/create_super_admin.php --name='Platform Admin' --email='admin@example.com'
 ```
 
-**2. Create Controller** → `controller/LoanController.php`
-```php
-class LoanController {
-    public function createLoan($data) { /* ... */ }
-    public function getAllLoans() { /* ... */ }
-    // etc.
-}
-```
+Enter a password when prompted. Existing accounts are never overwritten.
 
-**3. Create Views** → `view/loans/`
-```
-├─ listLoans.php
-├─ createLoan.php
-├─ editLoan.php
-└─ viewLoan.php
-```
+Open `http://localhost/class_learning/PDO/index.php` for the welcome page.
 
----
+- **Firm owner:** choose **Register your firm**, submit business and account details, and sign in. Your dashboard shows **PENDING** until reviewed.
+- **Super admin:** sign in, review pending registrations, and choose **Approve firm** or **Reject**. Rejection requires a reason.
+- **Approved firm:** refresh the dashboard, choose **Register customer** or **View your customers**. Only your firm's customers are accessible.
+- **Rejected firm:** sign in to see the rejection reason. Contact the platform administrator about the registration.
+- **Customer account setup:** as an approved firm or super admin, open a customer’s detail page and choose **Customer login access**. Set the customer’s login email and password, then give them their credentials directly.
+- **Customer:** use **Customer sign in** (`customerLogin.php`). View your account, firm contacts, and loan requests. A verified customer linked to an approved firm can request a loan using an active product. Open a request to see decisions and any issued loan balance.
 
-## Tips
+Customer record forms submit to `PDO/customer.php`. Account sign-in forms submit to `PDO/auth.php`. Firm reviews submit to `PDO/firm.php`. Loan requests submit to `PDO/loan.php`; customer login creation submits to `PDO/customerAccount.php`.
 
-- **To add a new field**: Edit both model & form
-- **To change validation**: Edit `validateCustomerData()` in controller
-- **To modify table**: Update SQL in CustomerModel methods
-- **To reuse logic**: Add methods to BaseModel
-- **For security**: Always use prepared statements (already done)
+Existing lending products are preserved. On a fresh installation, configure active products in `loan_products` before customers can submit requests. The customer portal displays existing decisions and loan records; staff loan approval and repayment screens are not included.
 
----
-
-## Current System
-
-✓ Customers can be created, read, updated, deleted
-✓ Search & filter customers
-✓ Pagination for large lists
-✓ KYC status management
-✓ Responsive UI
-✓ Full validation
-✓ Audit timestamps
-
-Next: Loans, Payments, Recovery Management
+Existing customers without a firm remain visible to super admins. See `README.md` for configuration and `TESTING.md` for verification.

@@ -4,6 +4,8 @@
  * Display full customer information
  */
 
+require_once __DIR__ . '/../../includes/bootstrap.php';
+$user = require_customer_access();
 require_once __DIR__ . '/../../controller/CustomerController.php';
 
 $controller = new CustomerController();
@@ -12,12 +14,14 @@ $controller = new CustomerController();
 $customer_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($customer_id <= 0) {
+    http_response_code(400);
     die("Invalid customer ID");
 }
 
 // Fetch customer data
 $result = $controller->getCustomer($customer_id);
 if (!$result['success']) {
+    http_response_code(404);
     die("Customer not found");
 }
 
@@ -227,6 +231,7 @@ $customer = $result['customer'];
     </style>
 </head>
 <body>
+    <?php require __DIR__ . '/../../includes/customerNav.php'; ?>
     <div class="container">
         <div class="header">
             <div class="header-info">
@@ -333,6 +338,7 @@ $customer = $result['customer'];
             </div>
 
             <div class="actions">
+                <a href="<?= e(app_url('customerAccount.php?id=' . $customer['customer_id'])) ?>" class="btn btn-edit">Customer login access</a>
                 <a href="editCustomer.php?id=<?php echo $customer['customer_id']; ?>" class="btn btn-edit">
                     Edit Customer
                 </a>

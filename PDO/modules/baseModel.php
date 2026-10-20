@@ -24,7 +24,11 @@ abstract class BaseModel {
     protected function execute($sql, $params = []) {
         try {
             $stmt = $this->db->prepare($sql);
-            $stmt->execute($params);
+            foreach (array_values($params) as $index => $value) {
+                $type = is_int($value) ? PDO::PARAM_INT : ($value === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+                $stmt->bindValue($index + 1, $value, $type);
+            }
+            $stmt->execute();
             return $stmt;
         } catch (PDOException $e) {
             throw new Exception("Database error: " . $e->getMessage());

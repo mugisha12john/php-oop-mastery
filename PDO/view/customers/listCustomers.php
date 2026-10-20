@@ -4,19 +4,21 @@
  * Displays all customers with pagination, search, and action buttons
  */
 
+require_once __DIR__ . '/../../includes/bootstrap.php';
+$user = require_customer_access();
 require_once __DIR__ . '/../../controller/CustomerController.php';
 
 $controller = new CustomerController();
 
 // Handle page request
-$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$page = max(1, (int) ($_GET['page'] ?? 1));
 $result = $controller->getAllCustomers($page, 10);
 
 // Handle search
 $search_term = '';
 $search_results = null;
-if (isset($_GET['search']) && !empty($_GET['search'])) {
-    $search_term = htmlspecialchars($_GET['search']);
+if (isset($_GET['search']) && is_string($_GET['search']) && trim($_GET['search']) !== '') {
+    $search_term = $_GET['search'];
     $search_results = $controller->searchCustomers($search_term);
 }
 ?>
@@ -323,13 +325,14 @@ if (isset($_GET['search']) && !empty($_GET['search'])) {
     </style>
 </head>
 <body>
+    <?php require __DIR__ . '/../../includes/customerNav.php'; ?>
     <div class="container">
         <h1>Customer Management</h1>
 
         <div class="header-actions">
-            <form method="GET" class="search-form">
+            <form method="GET" action="../../customer.php" class="search-form">
                 <input type="text" name="search" placeholder="Search by name, phone, or ID..." 
-                       value="<?php echo $search_term; ?>">
+                       value="<?php echo htmlspecialchars($search_term); ?>">
                 <button type="submit" class="btn btn-secondary">Search</button>
                 <a href="listCustomers.php" class="btn btn-secondary">Clear</a>
             </form>

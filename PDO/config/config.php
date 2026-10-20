@@ -9,9 +9,12 @@ class Database {
     private $connection;
 
     private function __construct() {
-        $dsn = "mysql:host=localhost;dbname=money_lending_db;charset=utf8mb4";
-        $user = "app_user";
-        $password = "buban1234";
+        $dsn = getenv('DB_DSN') ?: "mysql:host=localhost;dbname=money_lending_db;charset=utf8mb4";
+        $user = getenv('DB_USER') ?: "app_user";
+        $password = getenv('DB_PASSWORD');
+        if ($password === false) {
+            $password = "buban1234";
+        }
 
         try {
             $this->connection = new PDO($dsn, $user, $password, [
@@ -20,7 +23,12 @@ class Database {
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]);
         } catch (PDOException $e) {
-            die("Connection failed: " . $e->getMessage());
+            error_log('Database connection failed: ' . $e->getMessage());
+            if (PHP_SAPI === 'cli') {
+                throw $e;
+            }
+            http_response_code(503);
+            exit('Database unavailable. Please check the database configuration.');
         }
     }
 
