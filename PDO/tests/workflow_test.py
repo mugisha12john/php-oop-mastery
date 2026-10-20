@@ -86,10 +86,19 @@ class Browser:
 
 def cleanup():
     # Only rows belonging to this random test prefix are touched.
+    php('require "PDO/config/config.php"; require "PDO/app/Lending/DocumentService.php";'
+        '$input=json_decode(stream_get_contents(STDIN),true);'
+        '$s=$conn->prepare("SELECT d.file_path FROM customer_documents d JOIN customers c ON c.customer_id=d.customer_id JOIN users u ON u.user_id=c.registered_by WHERE u.email LIKE ?");'
+        '$s->execute([$input["prefix"]]); foreach($s->fetchAll(PDO::FETCH_COLUMN) as $key) {'
+        'if(preg_match("/^[a-f0-9]{48}$/D",$key)){ $file=DocumentService::storage()."/".$key; if(is_file($file)) unlink($file); }}', {"prefix": PREFIX + "%"})
+    for table in ["payment_submissions", "financial_references", "disbursements", "payments"]:
+        sql(f"DELETE x FROM {table} x JOIN loans l ON l.loan_id=x.loan_id JOIN customers c ON c.customer_id=l.customer_id JOIN users u ON u.user_id=c.registered_by WHERE u.email LIKE ?", [PREFIX + "%"])
+    sql("DELETE a FROM audit_logs a JOIN users u ON u.user_id=a.user_id WHERE u.email LIKE ?", [PREFIX + "%"])
     sql("DELETE l FROM loans l JOIN customers c ON c.customer_id=l.customer_id JOIN users u ON u.user_id=c.registered_by WHERE u.email LIKE ?", [PREFIX + "%"])
     sql("DELETE a FROM loan_applications a JOIN customers c ON c.customer_id=a.customer_id JOIN users u ON u.user_id=c.registered_by WHERE u.email LIKE ?", [PREFIX + "%"])
     sql("DELETE FROM loan_products WHERE product_name LIKE ?", [PREFIX + "%"])
     sql("DELETE c FROM customers c JOIN users u ON u.user_id = c.registered_by WHERE u.email LIKE ?", [PREFIX + "%"])
+    sql("UPDATE users SET firm_id=NULL WHERE email LIKE ?", [PREFIX + "%"])
     sql("DELETE f FROM firms f JOIN users u ON u.user_id = f.user_id WHERE u.email LIKE ?", [PREFIX + "%"])
     sql("DELETE FROM users WHERE email LIKE ?", [PREFIX + "%"])
 
@@ -102,12 +111,14 @@ def main():
     ], cwd=ROOT, env=ENV, check=True, capture_output=True)
 
     with tempfile.TemporaryDirectory(prefix="mlms-http-") as temp:
+        ENV['DOCUMENT_STORAGE_PATH'] = str(Path(temp) / 'documents')
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))
             port = sock.getsockname()[1]
         with open(Path(temp) / "server.log", "w+") as log:
             server = subprocess.Popen([
                 "php", "-d", "session.save_path=" + temp, "-d", "display_errors=1",
+                "-d", "upload_max_filesize=5M", "-d", "post_max_size=8M",
                 "-d", "error_reporting=32767", "-S", f"127.0.0.1:{port}", "-t", str(ROOT),
             ], cwd=ROOT, env=ENV, stdout=log, stderr=log)
             try:
@@ -133,7 +144,8 @@ def main():
                     assert code == 303 and headers["Location"] == "/PDO/login.php", page
                 assert anonymous.request("auth.php", {"action": "login"})[0] == 403
                 for page in ["users/insert.php", "users/deleteUser.php?id=1", "users/updateUser.php?id=1",
-                             "users/getAllUsers.php", "users/getUserById.php", "database/create_super_admin.php",
+                             "users/getAllUsers.php", "users/getUserById.php", "examples/users/insert.php",
+                             "examples/users/UserRepository.php", "examples/users/helper/getId.php", "database/create_super_admin.php",
                              "database/migrate.php"]:
                     assert anonymous.request(page)[0] == 404, page
 
@@ -198,7 +210,7 @@ def main():
                     data = {
                         "action": "create", "national_id_number": "8" + str(secrets.randbelow(10**15)).zfill(15),
                         "full_name": PREFIX + name + " Customer", "phone_number": "+250788123456",
-                        "email": name + "@example.invalid", "physical_address": "Kigali", "monthly_income_rwf": "0",
+                        "email": "", "physical_address": "Kigali", "monthly_income_rwf": "0",
                         "firm_id": firms["beta" if name == "alpha" else "alpha"]["firm_id"], "registered_by": "1",
                     }
                     code, headers, _ = browser.submit("customer.php", "view/customers/registerCustomer.php", data)
@@ -214,7 +226,7 @@ def main():
                 scoped = php(
                     'session_save_path(sys_get_temp_dir()); require "PDO/includes/bootstrap.php";'
                     '$input=json_decode(stream_get_contents(STDIN),true); $_SESSION["user_id"]=$input["actor"];'
-                    'require "PDO/modules/customerModel.php"; $model=new CustomerModel();'
+                    'require "PDO/app/Customers/CustomerModel.php"; $model=new CustomerModel();'
                     'echo json_encode(['
                     '"count"=>$model->getTotalCount(),'
                     '"id"=>$model->getById($input["other_id"]),'
@@ -253,6 +265,12 @@ def main():
                 assert customer_forms["beta"]["full_name"] in admin.request("view/customers/listCustomers.php?search=" + urllib.parse.quote(customer_forms["beta"]["national_id_number"]))[2]
                 from customer_portal_checks import check_customer_portal
                 check_customer_portal(Browser, sql, base, PREFIX, PASSWORD, browsers, customer_ids, admin)
+                from product_checks import check_products
+                check_products(Browser, sql, base, PREFIX, PASSWORD, browsers, firms, admin)
+                from lending_checks import check_lending
+                check_lending(Browser, sql, base, PREFIX, PASSWORD, browsers, firms, admin)
+                from i18n_checks import check_i18n
+                check_i18n(Browser, sql, base, PREFIX, PASSWORD, browsers, firms, admin)
                 assert alpha.request("auth.php", method="GET")[0] == 405
                 assert alpha.request("auth.php", {"action": "logout", "csrf_token": "bad"})[0] == 403
                 assert alpha.submit("auth.php", "dashboard.php", {"action": "logout"})[0] == 303

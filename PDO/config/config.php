@@ -22,6 +22,10 @@ class Database {
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]);
+            if ($this->connection->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+                // Keep SQL dates, overdue checks, and audit timestamps on the same clock as the UI.
+                $this->connection->exec("SET time_zone = '+02:00'");
+            }
         } catch (PDOException $e) {
             error_log('Database connection failed: ' . $e->getMessage());
             if (PHP_SAPI === 'cli') {

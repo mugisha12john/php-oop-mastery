@@ -1,30 +1,25 @@
 # Quick start
 
-From the project root, run the additive database migration:
-
 ```bash
 php PDO/database/migrate.php
-```
-
-Use an existing super admin, or create a new one:
-
-```bash
 php PDO/database/create_super_admin.php --name='Platform Admin' --email='admin@example.com'
 ```
 
-Enter a password when prompted. Existing accounts are never overwritten.
+Skip administrator creation if you already have an account. Open `http://localhost/class_learning/PDO/`.
 
-Open `http://localhost/class_learning/PDO/index.php` for the welcome page.
+English is the default language. Use the header language selector and **Apply language** to choose French or Kinyarwanda. The browser remembers your choice. The [folder guide](docs/ARCHITECTURE.md) explains the project layout; [translation maintenance](docs/I18N.md) explains how to change the wording.
 
-- **Firm owner:** choose **Register your firm**, submit business and account details, and sign in. Your dashboard shows **PENDING** until reviewed.
-- **Super admin:** sign in, review pending registrations, and choose **Approve firm** or **Reject**. Rejection requires a reason.
-- **Approved firm:** refresh the dashboard, choose **Register customer** or **View your customers**. Only your firm's customers are accessible.
-- **Rejected firm:** sign in to see the rejection reason. Contact the platform administrator about the registration.
-- **Customer account setup:** as an approved firm or super admin, open a customer’s detail page and choose **Customer login access**. Set the customer’s login email and password, then give them their credentials directly.
-- **Customer:** use **Customer sign in** (`customerLogin.php`). View your account, firm contacts, and loan requests. A verified customer linked to an approved firm can request a loan using an active product. Open a request to see decisions and any issued loan balance.
+1. Register a firm and approve it as super admin.
+2. From **User accounts**, create/assign the firm's manager, accountant, and recovery officer.
+3. As the firm, create a product under **Loan products**. Register a customer with an email to create their login automatically. Without an email, provision login access from the customer's profile later.
+4. As the customer, sign in using **`customer123456789`**, set a personal password, then upload the national ID and proof of income under **My documents**.
+5. As the firm owner, approve both current documents under **Document reviews**.
+6. As the customer, choose a product under **Explore loans** and submit the application.
+7. As the manager, review and approve the application.
+8. As the accountant, open the loan and record its disbursement. Its schedule is created automatically.
+9. As the customer, submit a bank/mobile payment reference under **Repayments**. As the accountant, verify and confirm it under **Payment confirmations**. Cash payments can be posted directly by the accountant.
+10. The customer sees the updated balance, schedule, payment history, and printable receipt. Recovery officers can work overdue installments and record borrower contact.
 
-Customer record forms submit to `PDO/customer.php`. Account sign-in forms submit to `PDO/auth.php`. Firm reviews submit to `PDO/firm.php`. Loan requests submit to `PDO/loan.php`; customer login creation submits to `PDO/customerAccount.php`.
+Firm owners manage their products under **Loan products**; customers see only their own firm's active products. Super admins can assign existing unowned products to a firm. Existing customer passwords and loan terms are preserved. Passwords are stored as hashes in the linked user account. Interest is a flat rate applied once to principal. Bank/mobile transfers happen outside the app and need accountant confirmation.
 
-Existing lending products are preserved. On a fresh installation, configure active products in `loan_products` before customers can submit requests. The customer portal displays existing decisions and loan records; staff loan approval and repayment screens are not included.
-
-Existing customers without a firm remain visible to super admins. See `README.md` for configuration and `TESTING.md` for verification.
+Before real document uploads, set `DOCUMENT_STORAGE_PATH` to persistent storage outside the web root, writable by PHP. The default development directory is under `/tmp`. PHP upload limits must allow 5 MB documents. See `README.md` for configuration and `TESTING.md` for verification.

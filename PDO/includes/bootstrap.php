@@ -1,7 +1,11 @@
 <?php
 
+require_once __DIR__ . '/../app/autoload.php';
 require_once __DIR__ . '/../config/config.php';
+date_default_timezone_set('Africa/Kigali');
 header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: SAMEORIGIN');
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     ini_set('session.use_strict_mode', '1');
@@ -36,6 +40,27 @@ function app_url(string $path = ''): string
     return rtrim($base, '/') . '/' . ltrim($path, '/');
 }
 
+function asset_url(string $path): string
+{
+    $version = substr(hash_file('sha256', __DIR__ . '/../' . $path), 0, 12);
+    return app_url($path) . '?v=' . $version;
+}
+
+function language_return_path(string $path): string
+{
+    $parts = parse_url($path);
+    $allowed = ['index.php','dashboard.php','login.php','customerLogin.php','registerFirm.php','customerAccount.php',
+        'requestLoan.php','loan.php','portal/apply.php','portal/application.php','portal/documents.php','portal/payments.php',
+        'portal/password.php','portal/receipt.php','workspace/index.php','workspace/application.php','workspace/loan.php',
+        'workspace/products.php','workspace/users.php','workspace/reports.php','workspace/audit.php',
+        'view/auth/login.php','view/auth/customerLogin.php','view/auth/registerFirm.php',
+        'view/customers/listCustomers.php','view/customers/registerCustomer.php','view/customers/editCustomer.php',
+        'view/customers/viewCustomer.php','view/customers/loginAccess.php'];
+    if ($parts === false || isset($parts['scheme']) || isset($parts['host']) || strpbrk($path, "\r\n\\") !== false
+        || !in_array($parts['path'] ?? '', $allowed, true)) { return 'index.php'; }
+    return $parts['path'] . (isset($parts['query']) ? '?' . $parts['query'] : '');
+}
+
 function redirect(string $path): never
 {
     header('Location: ' . app_url($path), true, 303);
@@ -60,12 +85,12 @@ function require_post(): void
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
         header('Allow: POST');
         http_response_code(405);
-        exit('Method not allowed');
+        exit(t('Method not allowed'));
     }
     $token = $_POST['csrf_token'] ?? null;
     if (!is_string($token) || !hash_equals(csrf_token(), $token)) {
         http_response_code(403);
-        exit('Your form expired. Go back, refresh the page, and try again.');
+        exit(t('Your form expired. Go back, refresh the page, and try again.'));
     }
 }
 
@@ -77,16 +102,20 @@ function current_user(): ?array
         $loaded = true;
         if (isset($_SESSION['user_id'])) {
             $statement = db()->prepare(
-                'SELECT u.user_id, u.full_name, u.email, r.role_name,
-                        f.firm_id, f.firm_name, f.status AS firm_status, f.rejection_reason
+                'SELECT u.user_id, u.full_name, u.email, u.must_change_password, u.password_version, r.role_name,
+                        COALESCE(f.firm_id, sf.firm_id) AS firm_id,
+                        COALESCE(f.firm_name, sf.firm_name) AS firm_name,
+                        COALESCE(f.status, sf.status) AS firm_status, f.rejection_reason
                  FROM users u JOIN roles r ON r.role_id = u.role_id
                  LEFT JOIN firms f ON f.user_id = u.user_id
+                 LEFT JOIN firms sf ON sf.firm_id = u.firm_id
                  WHERE u.user_id = ? AND u.is_active = 1'
             );
             $statement->execute([$_SESSION['user_id']]);
             $user = $statement->fetch() ?: null;
-            if ($user === null) {
-                unset($_SESSION['user_id']);
+            if ($user === null || (int) $user['password_version'] !== (int) ($_SESSION['password_version'] ?? 0)) {
+                $user = null;
+                unset($_SESSION['user_id'], $_SESSION['password_version']);
             }
         }
     }
@@ -99,6 +128,10 @@ function require_login(): array
     if ($user === null) {
         redirect('login.php');
     }
+    if ($user['role_name'] === 'CUSTOMER' && $user['must_change_password']
+        && ($_SERVER['SCRIPT_NAME'] ?? '') !== app_url('portal/password.php')) {
+        redirect('portal/password.php');
+    }
     return $user;
 }
 
@@ -107,9 +140,44 @@ function require_role(string $role): array
     $user = require_login();
     if ($user['role_name'] !== $role) {
         http_response_code(403);
-        exit('You do not have access to this page.');
+        exit(t('You do not have access to this page.'));
     }
     return $user;
+}
+
+function require_roles(array $roles): array
+{
+    $user = require_login();
+    if (!in_array($user['role_name'], $roles, true)) {
+        http_response_code(403);
+        exit(t('You do not have access to this page.'));
+    }
+    return $user;
+}
+
+function money($value): string
+{
+    return format_number($value, 2) . ' RWF';
+}
+
+function status_badge(string $status): string
+{
+    return '<span class="badge ' . e(strtolower($status)) . '">' . e(status_label($status)) . '</span>';
+}
+
+function form_nonce(string $key): string
+{
+    $_SESSION['nonces'][$key] ??= bin2hex(random_bytes(24));
+    return '<input type="hidden" name="form_nonce" value="' . e($_SESSION['nonces'][$key]) . '">';
+}
+
+function consume_nonce(string $key): void
+{
+    $token = post_string('form_nonce');
+    if (empty($_SESSION['nonces'][$key]) || !hash_equals($_SESSION['nonces'][$key], $token)) {
+        throw new DomainException(t('This form was already submitted or expired. Refresh the page and try again.'));
+    }
+    unset($_SESSION['nonces'][$key]);
 }
 
 function can_manage_customers(array $user): bool
@@ -123,7 +191,7 @@ function require_customer_access(): array
     $user = require_login();
     if (!can_manage_customers($user)) {
         http_response_code(403);
-        exit('Customer access requires an approved firm or a super admin account.');
+        exit(t('Customer access requires an approved firm or a super admin account.'));
     }
     return $user;
 }
@@ -158,7 +226,7 @@ function post_string(string $key): string
     $value = $_POST[$key] ?? '';
     if (!is_string($value)) {
         http_response_code(400);
-        exit('Invalid form field');
+        exit(t('Invalid form field'));
     }
     return $value;
 }

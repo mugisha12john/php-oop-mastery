@@ -1,11 +1,11 @@
 <?php
 require_once __DIR__ . '/includes/bootstrap.php';
 $user = require_login();
-$title = 'Dashboard';
+$title = t('Dashboard');
 define('DASHBOARD_VIEW', true);
 
 if ($user['role_name'] === 'SUPER_ADMIN') {
-    require_once __DIR__ . '/modules/firmModel.php';
+    require_once __DIR__ . '/app/Firms/FirmModel.php';
     $model = new FirmModel(db());
     $counts = $model->counts();
     $status = $_GET['status'] ?? 'PENDING';
@@ -30,20 +30,21 @@ if ($user['role_name'] === 'SUPER_ADMIN') {
     require __DIR__ . '/includes/header.php';
     require __DIR__ . '/view/dashboards/firm.php';
 } elseif ($user['role_name'] === 'CUSTOMER') {
-    require_once __DIR__ . '/modules/CustomerPortalService.php';
+    require_once __DIR__ . '/app/Customers/CustomerPortalService.php';
     $portal = new CustomerPortalService(db(), (int) $user['user_id']);
     $profile = $portal->profile();
     $summary = $portal->summary();
     $pages = max(1, (int) ceil($summary['total'] / 10));
     $page = min($pages, max(1, (int) ($_GET['page'] ?? 1)));
     $applications = $portal->applications($page);
+    require_once __DIR__ . '/app/Lending/LendingService.php';
+    $lending = new LendingService(db(), $user);
+    $portfolio = $lending->summary();
+    $customerLoans = $lending->loans();
+    $products = $portal->products();
     require __DIR__ . '/includes/header.php';
     require __DIR__ . '/view/dashboards/customer.php';
 } else {
-    require __DIR__ . '/includes/header.php';
-    ?>
-    <div class="page-heading"><div><span class="eyebrow"><?= e(str_replace('_', ' ', $user['role_name'])) ?></span><h1>Welcome, <?= e($user['full_name']) ?></h1></div></div>
-    <section class="card"><h2>Your account is active</h2><p>Firm registration and approval workspaces are available to firm owners and super admins. Contact your administrator about access for your role.</p></section>
-    <?php
+    redirect('workspace/index.php');
 }
 require __DIR__ . '/includes/footer.php';

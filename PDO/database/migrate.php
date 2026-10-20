@@ -27,11 +27,27 @@ try {
     if (!$ownerKey) {
         $db->exec('ALTER TABLE firms ADD UNIQUE KEY uq_firms_owner (user_id)');
     }
-    $role = $db->prepare('INSERT INTO roles (role_name, description) VALUES (?, ?)
-        ON DUPLICATE KEY UPDATE role_name = VALUES(role_name)');
-    $role->execute(['SUPER_ADMIN', 'Approves firm registrations and manages the platform.']);
-    $role->execute(['FIRM', 'Manages customers belonging to an approved firm.']);
-    $role->execute(['CUSTOMER', 'Views own customer profile and submits loan applications.']);
+    require __DIR__ . '/lending_migration.php';
+    $roles = [
+        1 => ['SUPER_ADMIN', 'Full system access; manages accounts and reads audit logs.'],
+        2 => ['MANAGER', 'Reviews loan applications and reads reports.'],
+        3 => ['ACCOUNTANT', 'Records disbursements and posts repayments.'],
+        4 => ['RECOVERY_OFFICER', 'Works overdue loans and records borrower contact.'],
+        5 => ['CUSTOMER', 'Views own profile, applications, schedules, and receipts.'],
+        9 => ['FIRM', 'Manages customers belonging to an approved firm.'],
+    ];
+    foreach ($roles as $id => [$name, $description]) {
+        $existing = $db->prepare('SELECT role_id FROM roles WHERE role_name=?');
+        $existing->execute([$name]);
+        if ($existing->fetchColumn()) { continue; }
+        $occupied = $db->prepare('SELECT role_id FROM roles WHERE role_id=?');
+        $occupied->execute([$id]);
+        if ($occupied->fetchColumn()) {
+            $db->prepare('INSERT INTO roles (role_name,description) VALUES (?,?)')->execute([$name,$description]);
+        } else {
+            $db->prepare('INSERT INTO roles (role_id,role_name,description) VALUES (?,?,?)')->execute([$id,$name,$description]);
+        }
+    }
     echo "Migration complete. Existing customers remain visible to super admins; new firm customers are scoped to their firm.\n";
 } catch (Throwable $error) {
     fwrite(STDERR, 'Migration failed: ' . $error->getMessage() . PHP_EOL);

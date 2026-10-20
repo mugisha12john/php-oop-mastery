@@ -1,5 +1,6 @@
 """Customer portal integration checks, run by workflow_test.py with isolated fixtures."""
 import re
+from account_checks import sign_in_customer
 
 
 def check_customer_portal(Browser, sql, base, prefix, password, firms, customer_ids, admin):
@@ -12,11 +13,11 @@ def check_customer_portal(Browser, sql, base, prefix, password, firms, customer_
         assert browser.request("customerAccount.php?id=" + str(other_id))[0] == 404
         assert browser.request(account_path, {"email": email})[0] == 403
         if name == "alpha":
-            # Failure must leave the customer unlinked and never echo passwords.
+            # Failure must leave the customer unlinked.
             invalid = browser.submit(account_path, account_path, {
-                "email": email, "password": password, "password_confirmation": "mismatch",
+                "email": "bad-email",
             })
-            assert invalid[0] == 200 and "Passwords do not match" in invalid[2] and password not in invalid[2]
+            assert invalid[0] == 200 and "valid customer email" in invalid[2] and password not in invalid[2]
             assert sql("SELECT user_id FROM customers WHERE customer_id=?", [customer_ids[name]])[0]["user_id"] is None
             # An existing staff email cannot be attached to a customer account.
             duplicate = browser.submit(account_path, account_path, {
@@ -38,11 +39,7 @@ def check_customer_portal(Browser, sql, base, prefix, password, firms, customer_
             "email": prefix + "second@example.invalid", "password": password, "password_confirmation": password,
         })
         assert not sql("SELECT user_id FROM users WHERE email=?", [prefix + "second@example.invalid"])
-        client = Browser(base)
-        code, headers, _ = client.submit("auth.php", "customerLogin.php", {
-            "action": "customer_login", "email": email, "password": password,
-        })
-        assert code == 303 and headers["Location"] == "/PDO/dashboard.php"
+        client = sign_in_customer(Browser, sql, base, email, password, security_checks=name == 'alpha')
         assert client.request("index.php")[1]["Location"] == "/PDO/dashboard.php"
         assert "Customer workspace" in client.request("dashboard.php")[2]
         for path in ["customerAccount.php?id=" + str(customer_ids[name]), "view/customers/listCustomers.php", "view/dashboards/firm.php"]:
@@ -56,10 +53,19 @@ def check_customer_portal(Browser, sql, base, prefix, password, firms, customer_
     })[1]["Location"] == "/PDO/customerLogin.php"
     assert wrong_role.request("dashboard.php")[0] == 303
 
-    sql("INSERT INTO loan_products (product_name,min_amount_rwf,max_amount_rwf,interest_rate_pct,default_term_months,max_term_months) VALUES (?,100,1000000,10,3,12)", [prefix + "portal-product"])
-    product = sql("SELECT product_id FROM loan_products WHERE product_name=?", [prefix + "portal-product"])[0]["product_id"]
+    products = {}
+    for name in ['alpha','beta']:
+        firm_id = sql('SELECT firm_id FROM firms WHERE firm_name=?',[prefix+name])[0]['firm_id']
+        sql("INSERT INTO loan_products (firm_id,product_name,min_amount_rwf,max_amount_rwf,interest_rate_pct,default_term_months,max_term_months) VALUES (?,?,100,1000000,10,3,12)", [firm_id, prefix + "portal-product"])
+        products[name] = sql('SELECT product_id FROM loan_products WHERE firm_id=? AND product_name=?',[firm_id,prefix+'portal-product'])[0]['product_id']
+    product = products['alpha']
     alpha, alpha_user = customers["alpha"]
     beta, _ = customers["beta"]
+    # Profile verification now requires approved current identity and income documents.
+    for name in ["alpha", "beta"]:
+        for kind in ["NATIONAL_ID", "PROOF_OF_INCOME"]:
+            sql("INSERT INTO customer_documents (customer_id,document_type,file_path,mime_type,file_size_bytes,review_status) VALUES (?,?,?,'application/pdf',10,'APPROVED')", [customer_ids[name], kind, "test-fixture"])
+    sql("UPDATE customers SET kyc_status='VERIFIED' WHERE customer_id=?", [customer_ids["alpha"]])
     assert "profile needs attention" in beta.request("requestLoan.php")[2]
     assert firms["alpha"].request("requestLoan.php")[0] == 403
     assert alpha.request("loan.php", {"product_id": product})[0] == 403
@@ -69,7 +75,7 @@ def check_customer_portal(Browser, sql, base, prefix, password, firms, customer_
         token = re.search(r'name="request_token" value="([a-f0-9]+)"', body)
         assert token, body
         return dict({
-            "request_token": token[1], "product_id": product,
+            "request_token": token[1], "product_id": products['beta'] if browser is beta else product,
             "amount_requested_rwf": "10000.50", "term_months": "3",
             "purpose": "Business supplies <&>", "customer_id": customer_ids["beta"],
             "submitted_by": "1", "status": "APPROVED", "approved_amount_rwf": "999999",
@@ -83,8 +89,9 @@ def check_customer_portal(Browser, sql, base, prefix, password, firms, customer_
     assert "up to 12 months" in alpha.request("requestLoan.php")[2]
     alpha.submit("loan.php", "requestLoan.php", request_data(alpha, purpose=""))
     assert "purpose of your loan" in alpha.request("requestLoan.php")[2]
+    unavailable = request_data(alpha)
     sql("UPDATE loan_products SET is_active=0 WHERE product_id=?", [product])
-    alpha.submit("loan.php", "requestLoan.php", request_data(alpha))
+    alpha.submit("loan.php", "dashboard.php", unavailable)
     assert "Choose an available loan product" in alpha.request("requestLoan.php")[2]
     sql("UPDATE loan_products SET is_active=1 WHERE product_id=?", [product])
     # Recheck eligibility at submission, even when the form was opened earlier.
@@ -104,7 +111,7 @@ def check_customer_portal(Browser, sql, base, prefix, password, firms, customer_
     detail = alpha.request(detail_path)
     assert detail[0] == 200 and "10,000.50" in detail[2] and "Business supplies &lt;&amp;&gt;" in detail[2]
     assert beta.request(detail_path)[0] == 404
-    assert "portal-product" not in beta.request("dashboard.php")[2]
+    assert ('loan.php?id=' + str(row['application_id']) + '"') not in beta.request("dashboard.php")[2]
     assert firms["alpha"].request(detail_path)[0] == 403
     # A repeat POST with the consumed form token cannot create a second application.
     alpha.submit("loan.php", "dashboard.php", submitted)
@@ -117,6 +124,9 @@ def check_customer_portal(Browser, sql, base, prefix, password, firms, customer_
     assert "9,000.25" in alpha.request(detail_path)[2]
     assert "9,000.25" not in beta.request("dashboard.php")[2]
     sql("UPDATE customers SET kyc_status='VERIFIED' WHERE customer_id=?", [customer_ids["beta"]])
+    beta.submit('loan.php','requestLoan.php',request_data(beta,product_id=product))
+    assert not sql('SELECT application_id FROM loan_applications WHERE customer_id=?',[customer_ids['beta']])
+    assert 'Choose an available loan product' in beta.request('requestLoan.php')[2]
     assert beta.submit("loan.php", "requestLoan.php", request_data(beta))[0] == 303
     assert sql("SELECT customer_id FROM loan_applications WHERE customer_id=?", [customer_ids["beta"]])
     result = alpha.submit("auth.php", "dashboard.php", {"action": "logout"})
