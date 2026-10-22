@@ -1,158 +1,25 @@
-# MLMS Quick Start Guide
+# Quick start
 
-## What You Have
-
-A complete MVC-based Customer Management system for the Money Lending Management System (MLMS).
-
-## Start Using It
-
-### 1. View All Customers
-```
-http://localhost/class_learning/PDO/view/customers/listCustomers.php
-```
-- See all registered customers
-- Search by name, phone, or National ID
-- Click Edit or View for details
-
-### 2. Register New Customer
-```
-http://localhost/class_learning/PDO/view/customers/registerCustomer.php
-```
-- Fill in: National ID (16 digits), Name, Phone, Address, Income
-- System validates input
-- Shows success message & redirects
-
-### 3. Edit Existing Customer
-```
-http://localhost/class_learning/PDO/view/customers/editCustomer.php?id=1
-```
-- All fields editable except National ID
-- Update KYC status (Pending → Verified → Rejected)
-- Changes saved & timestamps updated
-
-### 4. View Customer Details
-```
-http://localhost/class_learning/PDO/view/customers/viewCustomer.php?id=1
-```
-- Read-only customer profile
-- Shows audit info (created/updated dates)
-- Links to edit or return to list
-
----
-
-## File Organization
-
-```
-PDO/
-├── config/config.php
-│   └─ Database connection factory (Singleton)
-│
-├── modules/
-│   ├─ baseModel.php        ← Abstract class with helper methods
-│   └─ customerModel.php    ← All customer database queries
-│
-├── controller/
-│   └─ CustomerController.php  ← Business logic & validation
-│
-└── view/customers/
-    ├─ listCustomers.php       ← List page (with search)
-    ├─ registerCustomer.php    ← Create form
-    ├─ editCustomer.php        ← Edit form
-    └─ viewCustomer.php        ← Details page
+```bash
+php PDO/database/migrate.php
+php PDO/database/create_super_admin.php --name='Platform Admin' --email='admin@example.com'
 ```
 
----
+Skip administrator creation if you already have an account. Open `http://localhost/class_learning/PDO/`.
 
-## How It Works
+English is the default language. Use the header language selector and **Apply language** to choose French or Kinyarwanda. The browser remembers your choice. The [folder guide](docs/ARCHITECTURE.md) explains the project layout; [translation maintenance](docs/I18N.md) explains how to change the wording.
 
-1. **User visits view** (HTML form)
-2. **Form submits to controller** via POST
-3. **Controller validates** the data
-4. **If valid, model executes** database query
-5. **Controller gets result** from model
-6. **View displays** success/error message
+1. Register a firm and approve it as super admin.
+2. From **User accounts**, create/assign the firm's manager, accountant, and recovery officer.
+3. As the firm, create a product under **Loan products**. Register a customer with an email to create their login automatically. Without an email, provision login access from the customer's profile later.
+4. As the customer, sign in using **`customer123456789`**, set a personal password, then upload the national ID and proof of income under **My documents**.
+5. As the firm owner, approve both current documents under **Document reviews**.
+6. As the customer, choose a product under **Explore loans** and submit the application.
+7. As the manager, review and approve the application.
+8. As the accountant, open the loan and record its disbursement. Its schedule is created automatically.
+9. As the customer, submit a bank/mobile payment reference under **Repayments**. As the accountant, verify and confirm it under **Payment confirmations**. Cash payments can be posted directly by the accountant.
+10. The customer sees the updated balance, schedule, payment history, and printable receipt. Recovery officers can work overdue installments and record borrower contact.
 
----
+Firm owners manage their products under **Loan products**; customers see only their own firm's active products. Super admins can assign existing unowned products to a firm. Existing customer passwords and loan terms are preserved. Passwords are stored as hashes in the linked user account. Interest is a flat rate applied once to principal. Bank/mobile transfers happen outside the app and need accountant confirmation.
 
-## Built-In Features
-
-| Feature | Location |
-|---------|----------|
-| Create Customer | `registerCustomer.php` |
-| List All | `listCustomers.php` (10 per page) |
-| Search | Top of `listCustomers.php` |
-| Edit Customer | `editCustomer.php` |
-| View Details | `viewCustomer.php` |
-| KYC Status | In edit form (dropdown) |
-| Validation | `CustomerController.php` |
-| Pagination | `listCustomers.php` |
-
----
-
-## Database Fields
-
-When creating a customer, you provide:
-- **National ID** (16 digits, unique)
-- **Full Name** (up to 120 chars)
-- **Phone Number** (up to 20 chars, e.g. +250788123456)
-- **Email** (optional)
-- **Physical Address** (required)
-- **Monthly Income** (in RWF)
-
-All data is validated before being saved.
-
----
-
-## Next: Build Other Modules
-
-To create a **Loan Module**, follow the same pattern:
-
-**1. Create Model** → `modules/LoanModel.php`
-```php
-class LoanModel extends BaseModel {
-    public function save($data) { /* ... */ }
-    public function getAll() { /* ... */ }
-    // etc.
-}
-```
-
-**2. Create Controller** → `controller/LoanController.php`
-```php
-class LoanController {
-    public function createLoan($data) { /* ... */ }
-    public function getAllLoans() { /* ... */ }
-    // etc.
-}
-```
-
-**3. Create Views** → `view/loans/`
-```
-├─ listLoans.php
-├─ createLoan.php
-├─ editLoan.php
-└─ viewLoan.php
-```
-
----
-
-## Tips
-
-- **To add a new field**: Edit both model & form
-- **To change validation**: Edit `validateCustomerData()` in controller
-- **To modify table**: Update SQL in CustomerModel methods
-- **To reuse logic**: Add methods to BaseModel
-- **For security**: Always use prepared statements (already done)
-
----
-
-## Current System
-
-✓ Customers can be created, read, updated, deleted
-✓ Search & filter customers
-✓ Pagination for large lists
-✓ KYC status management
-✓ Responsive UI
-✓ Full validation
-✓ Audit timestamps
-
-Next: Loans, Payments, Recovery Management
+Before real document uploads, set `DOCUMENT_STORAGE_PATH` to persistent storage outside the web root, writable by PHP. The default development directory is under `/tmp`. PHP upload limits must allow 5 MB documents. See `README.md` for configuration and `TESTING.md` for verification.
